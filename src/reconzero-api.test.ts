@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getApi } from './reconzero-api';
 import {
   AnomalyType, TransactionType, expectedFeePaise, generateSyntheticLedger,
@@ -13,6 +16,13 @@ const result = (ledger: SyntheticLedger, asOfDate?: string) => api.reconcile({ .
 const findingsFor = (ledger: SyntheticLedger, type: string) => result(ledger).findings.filter((f) => f.type === type);
 
 describe('ReconZero contract and anomaly manifest', () => {
+  /**
+   * Requirement map: deterministic generation -> tests below; every planted
+   * rule -> the independent rule test; integer half-up fees -> boundary test;
+   * refund/late/leak separation -> focused amount tests; clean mode, malformed
+   * CSV, enums, browser-safe default wiring, and npm/Docker contracts -> the
+   * corresponding contract tests at the end of this file.
+   */
   it('detects every planted anomaly, without deriving expectations from engine output', () => {
     const ledger = anomalous(42, 30);
     const planted = new Set(ledger.manifest.planted.map((x) => x.type));
@@ -29,6 +39,22 @@ describe('ReconZero contract and anomaly manifest', () => {
       AnomalyType.DUPLICATE_REFUND, AnomalyType.REFUND_OVER_ORDER, AnomalyType.ROUNDING_LEAK,
     ]));
     expect([...expectedPublicTypes].every((type) => detected.has(type))).toBe(true);
+  });
+
+  it.each([
+    [AnomalyType.EXCESS_FEE, 'EXCESS_FEE'],
+    [AnomalyType.MISSING_SETTLEMENT, 'NOT_SETTLED'],
+    [AnomalyType.LATE_SETTLEMENT, 'LATE_SETTLEMENT'],
+    [AnomalyType.DUPLICATE_REFUND, 'DUPLICATE_REFUND'],
+    [AnomalyType.REFUND_OVER_ORDER, 'DUPLICATE_REFUND'],
+    [AnomalyType.ROUNDING_LEAK, 'ROUNDING_LEAK'],
+  ] as const)('detects planted %s independently as %s', (manifestType, publicType) => {
+    const ledger = anomalous(42, 30);
+    const planted = ledger.manifest.planted.find((x) => x.type === manifestType)!;
+    const matches = result(ledger).findings.filter((f) => f.type === publicType &&
+      (!planted.order_id || f.orderId === planted.order_id) &&
+      (!planted.settlement_batch_id || f.evidence.some((e) => e.value.includes(planted.settlement_batch_id!))));
+    expect(matches.length, `${manifestType} was not independently detected`).toBeGreaterThan(0);
   });
 
   it('has zero findings when anomalies are disabled', () => {
@@ -50,6 +76,7 @@ describe('ReconZero contract and anomaly manifest', () => {
   it('is deterministic for the same seed and changes for a different seed', () => {
     expect(generateSyntheticLedger({ seed: 123 })).toEqual(generateSyntheticLedger({ seed: 123 }));
     expect(generateSyntheticLedger({ seed: 123 })).not.toEqual(generateSyntheticLedger({ seed: 124 }));
+    expect(JSON.stringify(generateSyntheticLedger({ seed: 123 }))).toBe(JSON.stringify(generateSyntheticLedger({ seed: 123 })));
   });
 
   it('uses integer round-half-up fee arithmetic', () => {
@@ -103,6 +130,26 @@ describe('ReconZero contract and anomaly manifest', () => {
     expect(finding!.leakedPaise).toBe(planted.amount_paise);
   });
 
+  it('matches every amount-bearing planted leak to its finding amount', () => {
+    const ledger = anomalous(42, 30);
+    const reconciliation = result(ledger);
+    for (const planted of ledger.manifest.planted) {
+      if (planted.amount_paise === undefined) continue;
+      const publicType = planted.type === AnomalyType.REFUND_OVER_ORDER ? 'DUPLICATE_REFUND' : planted.type;
+      const finding = reconciliation.findings.find((f) => f.type === publicType &&
+        (!planted.order_id || f.orderId === planted.order_id) &&
+        (!planted.settlement_batch_id || f.evidence.some((e) => e.value.includes(planted.settlement_batch_id!))));
+      expect(finding, `missing finding for ${planted.type}`).toBeDefined();
+      if (planted.type === AnomalyType.REFUND_OVER_ORDER) {
+        // The manifest records attempted refund amount; the leaked amount is the overflow.
+        const order = ledger.orders.find((o) => o.order_id === planted.order_id)!;
+        expect(finding!.leakedPaise).toBe(planted.amount_paise - order.gross_amount_paise);
+      } else {
+        expect(finding!.leakedPaise).toBe(planted.amount_paise);
+      }
+    }
+  });
+
   it('puts late settlement amount in delayed, never leaked', () => {
     const ledger = anomalous(42, 30);
     const late = result(ledger).findings.find((f) => f.type === 'LATE_SETTLEMENT')!;
@@ -117,5 +164,26 @@ describe('ReconZero contract and anomaly manifest', () => {
     const affected = new Set(reconciliation.findings.map((f) => f.orderId));
     expect(reconciliation.matchPercentage).toBe(((ledger.orders.length - affected.size) / ledger.orders.length) * 100);
     expect(result(clean(42, 30)).matchPercentage).toBe(100);
+  });
+
+  it('keeps public enums fixed and uses the offline default API without window or network access', () => {
+    expect(Object.values(AnomalyType)).toEqual([
+      'EXCESS_FEE', 'MISSING_SETTLEMENT', 'LATE_SETTLEMENT',
+      'DUPLICATE_REFUND', 'REFUND_OVER_ORDER', 'ROUNDING_LEAK',
+    ]);
+    expect(Object.values(TransactionType)).toEqual(['CAPTURE', 'REFUND']);
+    const generated = getApi().generate(42) as SyntheticLedger;
+    expect(generated.manifest.seed).toBe(42);
+    expect(getApi().reconcile(generated).findings).toBeInstanceOf(Array);
+  });
+
+  it('keeps the documented npm and Docker test contracts', () => {
+    const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
+    const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { scripts: { test: string } };
+    const dockerfile = readFileSync(resolve(root, 'Dockerfile'), 'utf8');
+    expect(packageJson.scripts.test).toBe('vitest run');
+    expect(dockerfile).toContain('FROM node:22-bookworm-slim');
+    expect(dockerfile).toContain('RUN npm ci');
+    expect(dockerfile).toContain('CMD ["npm", "test"]');
   });
 });
