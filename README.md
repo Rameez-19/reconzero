@@ -1,5 +1,7 @@
 # ReconZero
 
+[![Docker test](../../actions/workflows/docker-test.yml/badge.svg?branch=master)](../../actions/workflows/docker-test.yml)
+
 ReconZero is a one-page, offline reconciliation control room. Enter a deterministic scenario seed, generate the payment universe, and reconcile it against settlement records. The page reports the match percentage, leaked rupees by anomaly type, delayed settlement separately, and an expandable evidence trail for each finding.
 
 ## Offline setup
