@@ -1,5 +1,5 @@
 node_modules/
 dist/
-.tsbuildinfo
+*.tsbuildinfo
 .env
 .DS_Store
