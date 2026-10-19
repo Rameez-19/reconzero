@@ -140,13 +140,7 @@ describe('ReconZero contract and anomaly manifest', () => {
         (!planted.order_id || f.orderId === planted.order_id) &&
         (!planted.settlement_batch_id || f.evidence.some((e) => e.value.includes(planted.settlement_batch_id!))));
       expect(finding, `missing finding for ${planted.type}`).toBeDefined();
-      if (planted.type === AnomalyType.REFUND_OVER_ORDER) {
-        // The manifest records attempted refund amount; the leaked amount is the overflow.
-        const order = ledger.orders.find((o) => o.order_id === planted.order_id)!;
-        expect(finding!.leakedPaise).toBe(planted.amount_paise - order.gross_amount_paise);
-      } else {
-        expect(finding!.leakedPaise).toBe(planted.amount_paise);
-      }
+      expect(finding!.leakedPaise).toBe(planted.amount_paise);
     }
   });
 

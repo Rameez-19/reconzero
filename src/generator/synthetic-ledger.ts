@@ -71,7 +71,7 @@ export function generateSyntheticLedger(options: LedgerGeneratorOptions): Synthe
     transactions.push({ transaction_id: `${refundId}-OVER`, order_id: overOrder.order_id, transaction_type: TransactionType.REFUND, amount_paise: overAmount, fee_amount_paise: 0, transaction_at: overOrder.order_date, settlement_batch_id: null });
     order.status = OrderStatus.PARTIALLY_REFUNDED;
     overOrder.status = OrderStatus.REFUNDED;
-    planted.push({ type: AnomalyType.REFUND_OVER_ORDER, order_id: overOrder.order_id, amount_paise: overAmount, detail: "Refund total exceeds order gross by 1 paise" });
+    planted.push({ type: AnomalyType.REFUND_OVER_ORDER, order_id: overOrder.order_id, amount_paise: overAmount - overOrder.gross_amount_paise, detail: `Refund total exceeds order gross by ${overAmount - overOrder.gross_amount_paise} paise` });
   }
 
   const byBatch = new Map<string, GatewaySettlementCsvRow[]>();
