@@ -3,3 +3,7 @@ dist/
 *.tsbuildinfo
 .env
 .DS_Store
+
+# Local OpenCode/OmniRush workspace metadata and user-specific config.
+.opencode/
+opencode.jsonc
