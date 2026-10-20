@@ -9,12 +9,23 @@ import {
 } from './domain';
 import { CsvValidationError } from './reconciliation';
 import { comparePlantedToCaught } from './proof';
+import type { Finding, ReconciliationResult } from './reconzero-api';
 
 const api = getApi();
 const clean = (seed = 42, orderCount = 30) => generateSyntheticLedger({ seed, orderCount, anomalies: false });
 const anomalous = (seed = 42, orderCount = 30) => generateSyntheticLedger({ seed, orderCount, anomalies: true });
 const result = (ledger: SyntheticLedger, asOfDate?: string) => api.reconcile({ ...ledger, asOfDate });
 const findingsFor = (ledger: SyntheticLedger, type: string) => result(ledger).findings.filter((f) => f.type === type);
+const proofLedger = (planted: SyntheticLedger['manifest']['planted'], enabled = true): SyntheticLedger => ({
+  orders: [], transactions: [], settlements: [], bankStatement: [], manifest: { seed: 1, enabled, planted },
+});
+const proofFinding = (overrides: Partial<Finding> = {}): Finding => ({
+  id: 'finding-1', orderId: 'ORD-1', type: 'EXCESS_FEE', leakedPaise: 7, delayedPaise: 0,
+  description: 'proof fixture', evidence: [], ...overrides,
+});
+const proofResult = (findings: Finding[]): ReconciliationResult => ({
+  matchPercentage: 100, leakedByType: {}, delayedPaise: 0, findings,
+});
 
 describe('ReconZero contract and anomaly manifest', () => {
   /**
@@ -64,23 +75,36 @@ describe('ReconZero contract and anomaly manifest', () => {
     expect(result(ledger).findings).toEqual([]);
   });
 
-  it('compares generated manifest counts and amounts without counting delayed money as leaked', () => {
-    const ledger = anomalous(42, 30);
-    const comparison = comparePlantedToCaught(ledger, result(ledger));
-    expect(comparison.rows.every((row) => row.plantedCount === row.caughtCount)).toBe(true);
-    expect(comparison.rows.find((row) => row.type === AnomalyType.LATE_SETTLEMENT)).toMatchObject({ plantedCount: 1, caughtCount: 1, plantedPaise: 0, caughtPaise: 0, status: 'MATCH' });
-    expect(comparison.delayedPaise).toBeGreaterThan(0);
+  it('reports all planted anomalies as caught when every finding matches', () => {
+    const planted = { type: AnomalyType.EXCESS_FEE, order_id: 'ORD-1', amount_paise: 7, detail: 'fee' };
+    const comparison = comparePlantedToCaught(proofLedger([planted]), proofResult([proofFinding()]));
+    expect(comparison.rows.find((row) => row.type === AnomalyType.EXCESS_FEE)).toMatchObject({ plantedCount: 1, caughtCount: 1, plantedPaise: 7, caughtPaise: 7, status: 'MATCH' });
     expect(comparison.missed).toEqual([]);
-    // The engine intentionally emits a second excess-fee finding for the
-    // settlement-side evidence; the proof panel surfaces that as unexpected.
-    expect(comparison.unexpected.some((finding) => finding.type === 'EXCESS_FEE')).toBe(true);
+    expect(comparison.unexpected).toEqual([]);
   });
 
-  it('shows zero planted and caught rows when generated anomalies are off', () => {
-    const ledger = clean(7, 40);
-    const comparison = comparePlantedToCaught(ledger, result(ledger));
+  it('reports a planted anomaly as missed when no matching finding is caught', () => {
+    const planted = { type: AnomalyType.EXCESS_FEE, order_id: 'ORD-1', amount_paise: 7, detail: 'fee' };
+    const comparison = comparePlantedToCaught(proofLedger([planted]), proofResult([]));
+    expect(comparison.rows.find((row) => row.type === AnomalyType.EXCESS_FEE)).toMatchObject({ plantedCount: 1, caughtCount: 0, plantedPaise: 7, caughtPaise: 0, status: 'MISSED' });
+    expect(comparison.missed).toEqual([planted]);
+    expect(comparison.unexpected).toEqual([]);
+  });
+
+  it('keeps an extra engine finding in the unexpected proof list', () => {
+    const planted = { type: AnomalyType.EXCESS_FEE, order_id: 'ORD-1', amount_paise: 7, detail: 'fee' };
+    const extra = proofFinding({ id: 'finding-2', orderId: 'ORD-2' });
+    const comparison = comparePlantedToCaught(proofLedger([planted]), proofResult([proofFinding(), extra]));
+    expect(comparison.missed).toEqual([]);
+    expect(comparison.unexpected).toEqual([extra]);
+  });
+
+  it('shows zero planted and caught rows for a clean dataset', () => {
+    const comparison = comparePlantedToCaught(proofLedger([], false), proofResult([]));
     expect(comparison.rows).toHaveLength(6);
     expect(comparison.rows.every((row) => row.plantedCount === 0 && row.caughtCount === 0 && row.plantedPaise === 0 && row.caughtPaise === 0)).toBe(true);
+    expect(comparison.missed).toEqual([]);
+    expect(comparison.unexpected).toEqual([]);
   });
 
   it('reports malformed CSV as a clear validation error, not a crash', () => {
