@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AnomalyType } from './domain';
-import { comparePlantedToCaught, friendlyLabel } from './proof';
+import { comparePlantedToCaught, displayedLeakTotal, friendlyLabel, matchExplanation } from './proof';
 import type { Finding, ReconciliationResult } from './reconzero-api';
 
 const finding = (overrides: Partial<Finding> = {}): Finding => ({
@@ -26,5 +26,17 @@ describe('proof presentation', () => {
     ]));
     expect(comparison.rows.find((row) => row.type === AnomalyType.EXCESS_FEE)?.status).toBe('MISSED');
     expect(comparison.unexpected).toHaveLength(1);
+  });
+
+  it('keeps unsettled principal out of the displayed leak total and explains the match rate', () => {
+    const comparison = displayedLeakTotal({ ...result([
+      finding({ type: 'NOT_SETTLED', leakedPaise: 263985 }),
+      finding({ id: 'finding-2', type: 'EXCESS_FEE', leakedPaise: 37 }),
+    ]), leakedByType: { NOT_SETTLED: 263985, EXCESS_FEE: 37 } });
+    expect(comparison).toBe(37);
+    expect(matchExplanation(result([
+      finding({ type: 'NOT_SETTLED' }),
+      finding({ id: 'finding-2', orderId: 'ORD-2', type: 'ROUNDING_LEAK' }),
+    ]), 100)).toBe('98 of 100 orders fully reconciled · 2 affected by findings');
   });
 });

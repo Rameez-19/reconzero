@@ -18,6 +18,16 @@ export const friendlyLabels: Record<AnomalyType | FindingType, string> = {
 
 export const friendlyLabel = (type: string): string => friendlyLabels[type as AnomalyType | FindingType] ?? 'Other finding';
 
+/** Leak total excludes unsettled principal, which is shown in its own row. */
+export const displayedLeakTotal = (result: ReconciliationResult): number =>
+  Object.entries(result.leakedByType).reduce((total, [type, amount]) => type === 'NOT_SETTLED' ? total : total + (amount ?? 0), 0);
+
+export const matchExplanation = (result: ReconciliationResult, orderCount: number): string => {
+  const affected = new Set(result.findings.map((finding) => finding.orderId)).size;
+  const reconciled = Math.max(0, orderCount - affected);
+  return `${reconciled} of ${orderCount} orders fully reconciled · ${affected} affected by findings`;
+};
+
 const publicType = (type: AnomalyType): FindingType => type === AnomalyType.MISSING_SETTLEMENT ? 'NOT_SETTLED' : type === AnomalyType.REFUND_OVER_ORDER ? 'DUPLICATE_REFUND' : type as FindingType;
 const describes = (finding: Finding, planted: PlantedAnomaly) => {
   if (planted.order_id && finding.orderId !== planted.order_id) return false;
