@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AnomalyType } from './domain';
-import { comparePlantedToCaught, displayedLeakTotal, friendlyLabel, hasPlantedRoundingLeak, matchExplanation } from './proof';
+import { comparePlantedToCaught, displayedLeakTotal, findingBadgeClass, findingDisplayPaise, findingLabel, friendlyLabel, hasPlantedRoundingLeak, matchExplanation } from './proof';
 import type { Finding, ReconciliationResult } from './reconzero-api';
 
 const finding = (overrides: Partial<Finding> = {}): Finding => ({
@@ -17,6 +17,18 @@ describe('proof presentation', () => {
     expect(Object.values(AnomalyType).map(friendlyLabel)).toEqual([
       'Excess fee', 'Not settled', 'Late settlement', 'Duplicate refund', 'Refund over order', 'Rounding leak',
     ]);
+  });
+
+  it('labels refund overflow as refund over order while preserving duplicate refunds', () => {
+    expect(findingLabel(finding({ type: 'DUPLICATE_REFUND', description: 'Refunds exceed net order amount' }))).toBe('Refund over order');
+    expect(findingBadgeClass(finding({ type: 'DUPLICATE_REFUND', description: 'Refunds exceed net order amount' }))).toBe('refund_over_order');
+    expect(findingLabel(finding({ type: 'DUPLICATE_REFUND', description: 'Same-order same-amount duplicate refund rows' }))).toBe('Duplicate refund');
+  });
+
+  it('uses delayed paise for late settlement presentation while keeping leaked paise zero', () => {
+    const late = finding({ type: 'LATE_SETTLEMENT', leakedPaise: 0, delayedPaise: 1250 });
+    expect(findingDisplayPaise(late)).toBe(1250);
+    expect(late.leakedPaise).toBe(0);
   });
 
   it('does not report Match when an unexpected finding shares the displayed type', () => {

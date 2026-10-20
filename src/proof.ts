@@ -18,6 +18,19 @@ export const friendlyLabels: Record<AnomalyType | FindingType, string> = {
 
 export const friendlyLabel = (type: string): string => friendlyLabels[type as AnomalyType | FindingType] ?? 'Other finding';
 
+/** Refund overflow is emitted under the engine's duplicate-refund rule. */
+export const findingLabel = (finding: Pick<Finding, 'type' | 'description'>): string =>
+  finding.type === 'DUPLICATE_REFUND' && finding.description === 'Refunds exceed net order amount'
+    ? friendlyLabel(AnomalyType.REFUND_OVER_ORDER)
+    : friendlyLabel(finding.type);
+
+/** Late settlement is delayed money, so show that amount instead of a zero leak. */
+export const findingDisplayPaise = (finding: Pick<Finding, 'type' | 'leakedPaise' | 'delayedPaise'>): number =>
+  finding.type === 'LATE_SETTLEMENT' ? finding.delayedPaise : finding.leakedPaise;
+
+export const findingBadgeClass = (finding: Pick<Finding, 'type' | 'description'>): string =>
+  findingLabel(finding).toLowerCase().replaceAll(' ', '_');
+
 /** Leak total excludes unsettled principal, which is shown in its own row. */
 export const displayedLeakTotal = (result: ReconciliationResult): number =>
   Object.entries(result.leakedByType).reduce((total, [type, amount]) => type === 'NOT_SETTLED' ? total : total + (amount ?? 0), 0);
@@ -49,7 +62,7 @@ export function comparePlantedToCaught(ledger: SyntheticLedger, result: Reconcil
       if (match) { used.add(match.id); matches.push(match); } else missed.push(item);
     }
     const plantedPaise = planted.reduce((sum, item) => sum + (item.amount_paise ?? 0), 0);
-    const caughtPaise = matches.reduce((sum, item) => sum + item.leakedPaise, 0);
+     const caughtPaise = matches.reduce((sum, item) => sum + findingDisplayPaise(item), 0);
     return { type, plantedCount: planted.length, caughtCount: matches.length, plantedPaise, caughtPaise, status: 'MISSED' as const };
   });
   const unexpected = result.findings.filter((finding) => !used.has(finding.id));
