@@ -8,6 +8,7 @@ import {
   type SyntheticLedger,
 } from './domain';
 import { CsvValidationError } from './reconciliation';
+import { comparePlantedToCaught } from './proof';
 
 const api = getApi();
 const clean = (seed = 42, orderCount = 30) => generateSyntheticLedger({ seed, orderCount, anomalies: false });
@@ -61,6 +62,25 @@ describe('ReconZero contract and anomaly manifest', () => {
     const ledger = clean(7, 40);
     expect(ledger.manifest.planted).toHaveLength(0);
     expect(result(ledger).findings).toEqual([]);
+  });
+
+  it('compares generated manifest counts and amounts without counting delayed money as leaked', () => {
+    const ledger = anomalous(42, 30);
+    const comparison = comparePlantedToCaught(ledger, result(ledger));
+    expect(comparison.rows.every((row) => row.plantedCount === row.caughtCount)).toBe(true);
+    expect(comparison.rows.find((row) => row.type === AnomalyType.LATE_SETTLEMENT)).toMatchObject({ plantedCount: 1, caughtCount: 1, plantedPaise: 0, caughtPaise: 0, status: 'MATCH' });
+    expect(comparison.delayedPaise).toBeGreaterThan(0);
+    expect(comparison.missed).toEqual([]);
+    // The engine intentionally emits a second excess-fee finding for the
+    // settlement-side evidence; the proof panel surfaces that as unexpected.
+    expect(comparison.unexpected.some((finding) => finding.type === 'EXCESS_FEE')).toBe(true);
+  });
+
+  it('shows zero planted and caught rows when generated anomalies are off', () => {
+    const ledger = clean(7, 40);
+    const comparison = comparePlantedToCaught(ledger, result(ledger));
+    expect(comparison.rows).toHaveLength(6);
+    expect(comparison.rows.every((row) => row.plantedCount === 0 && row.caughtCount === 0 && row.plantedPaise === 0 && row.caughtPaise === 0)).toBe(true);
   });
 
   it('reports malformed CSV as a clear validation error, not a crash', () => {
