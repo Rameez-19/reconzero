@@ -17,6 +17,7 @@ function render(result: ReconciliationResult, generated?: unknown) {
   results.hidden = false;
   const proof = isSyntheticLedger(generated) ? comparePlantedToCaught(generated, result) : undefined;
    const summaryTypes = proof ? proof.rows.map((row) => ({ label: friendlyLabel(row.type), amount: row.caughtPaise })) : types.map((type) => ({ label: friendlyLabel(type), amount: result.leakedByType[type] ?? 0 }));
+   summaryTypes.push({ label: 'Total leaked', amount: displayedLeakTotal(result) });
    const byType = summaryTypes.map(({ label, amount }) => `<div class="metric"><span>${label}</span><strong>${money(amount)}</strong></div>`).join('');
    const roundingLeak = proof ? hasPlantedRoundingLeak(proof) : false;
    const orderCount = isSyntheticLedger(generated) ? generated.orders.length : result.findings.length ? new Set(result.findings.map((finding) => finding.orderId)).size : 0;
