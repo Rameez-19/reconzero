@@ -28,6 +28,9 @@ export const matchExplanation = (result: ReconciliationResult, orderCount: numbe
   return `${reconciled} of ${orderCount} orders fully reconciled · ${affected} affected by findings`;
 };
 
+export const hasPlantedRoundingLeak = (comparison: ProofComparison): boolean =>
+  comparison.rows.some((row) => row.type === AnomalyType.ROUNDING_LEAK && row.plantedCount > 0);
+
 const publicType = (type: AnomalyType): FindingType => type === AnomalyType.MISSING_SETTLEMENT ? 'NOT_SETTLED' : type === AnomalyType.REFUND_OVER_ORDER ? 'DUPLICATE_REFUND' : type as FindingType;
 const describes = (finding: Finding, planted: PlantedAnomaly) => {
   if (planted.order_id && finding.orderId !== planted.order_id) return false;

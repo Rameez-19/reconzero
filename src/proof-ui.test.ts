@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AnomalyType } from './domain';
-import { comparePlantedToCaught, displayedLeakTotal, friendlyLabel, matchExplanation } from './proof';
+import { comparePlantedToCaught, displayedLeakTotal, friendlyLabel, hasPlantedRoundingLeak, matchExplanation } from './proof';
 import type { Finding, ReconciliationResult } from './reconzero-api';
 
 const finding = (overrides: Partial<Finding> = {}): Finding => ({
@@ -38,5 +38,10 @@ describe('proof presentation', () => {
       finding({ type: 'NOT_SETTLED' }),
       finding({ id: 'finding-2', orderId: 'ORD-2', type: 'ROUNDING_LEAK' }),
     ]), 100)).toBe('98 of 100 orders fully reconciled · 2 affected by findings');
+  });
+
+  it('marks a planted rounding leak as a batch-level unreconciled condition', () => {
+    const comparison = comparePlantedToCaught(ledger([{ type: AnomalyType.ROUNDING_LEAK, settlement_batch_id: 'BATCH-0001', amount_paise: 1, detail: 'batch shortfall' }]), result([]));
+    expect(hasPlantedRoundingLeak(comparison)).toBe(true);
   });
 });
