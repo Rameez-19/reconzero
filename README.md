@@ -4,6 +4,16 @@
 
 ReconZero is a one-page, offline reconciliation control room. Enter a deterministic scenario seed, generate the payment universe, and reconcile it against settlement records. The page reports the match percentage, leaked rupees by anomaly type, delayed settlement separately, and an expandable evidence trail for each finding.
 
+## Live demo
+
+Open the deployed app at **[reconzero.vercel.app](https://reconzero.vercel.app/)**. Use the default seed `42`, click **Generate + Reconcile**, and review the generated-data proof panel before expanding the evidence trail.
+
+### Proof panel
+
+The proof panel makes the demo judgeable at a glance: it compares what the synthetic scenario planted with what the reconciliation engine caught, while keeping **₹ delayed** separate from **₹ leaked**.
+
+![ReconZero planted versus caught proof panel](docs/proof-panel.svg)
+
 ## Offline setup
 
 Requires Node 22 (the repository includes `.nvmrc`). Install exactly the checked-in dependency graph and run the checks:
