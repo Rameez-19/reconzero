@@ -54,7 +54,7 @@ export function generateSyntheticLedger(options: LedgerGeneratorOptions): Synthe
       settlements.push({ settlement_id: `SET-${String(i + 1).padStart(6, "0")}`, settlement_batch_id: batch, transaction_id: captureId, order_id: orderId, gross_amount_paise: gross, fee_amount_paise: feeAmount, net_amount_paise: net, expected_settlement_date: expectedDate, settled_at: settledAt });
     }
     if (excess) planted.push({ type: AnomalyType.EXCESS_FEE, order_id: orderId, transaction_id: captureId, amount_paise: 37, detail: "Fee exceeds contracted fee by 37 paise" });
-    if (missing) planted.push({ type: AnomalyType.MISSING_SETTLEMENT, order_id: orderId, transaction_id: captureId, detail: "Capture has no settlement batch" });
+    if (missing) planted.push({ type: AnomalyType.MISSING_SETTLEMENT, order_id: orderId, transaction_id: captureId, amount_paise: gross - feeAmount, detail: "Capture has no settlement batch" });
     if (late) planted.push({ type: AnomalyType.LATE_SETTLEMENT, order_id: orderId, transaction_id: captureId, detail: "Settlement posted after expected settlement date" });
   }
 

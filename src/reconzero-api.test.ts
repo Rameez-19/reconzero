@@ -179,7 +179,7 @@ describe('ReconZero contract and anomaly manifest', () => {
     const reconciliation = result(ledger);
     for (const planted of ledger.manifest.planted) {
       if (planted.amount_paise === undefined) continue;
-      const publicType = planted.type === AnomalyType.REFUND_OVER_ORDER ? 'DUPLICATE_REFUND' : planted.type;
+      const publicType = planted.type === AnomalyType.MISSING_SETTLEMENT ? 'NOT_SETTLED' : planted.type === AnomalyType.REFUND_OVER_ORDER ? 'DUPLICATE_REFUND' : planted.type;
       const finding = reconciliation.findings.find((f) => f.type === publicType &&
         (!planted.order_id || f.orderId === planted.order_id) &&
         (!planted.settlement_batch_id || f.evidence.some((e) => e.value.includes(planted.settlement_batch_id!))));
