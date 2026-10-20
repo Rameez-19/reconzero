@@ -5,6 +5,19 @@ export const proofTypes: AnomalyType[] = [AnomalyType.EXCESS_FEE, AnomalyType.MI
 export interface ProofRow { type: AnomalyType; plantedCount: number; caughtCount: number; plantedPaise: number; caughtPaise: number; status: 'MATCH' | 'MISSED'; }
 export interface ProofComparison { rows: ProofRow[]; missed: PlantedAnomaly[]; unexpected: Finding[]; delayedPaise: number; }
 
+/** User-facing names for both manifest-specific and public finding types. */
+export const friendlyLabels: Record<AnomalyType | FindingType, string> = {
+  EXCESS_FEE: 'Excess fee',
+  MISSING_SETTLEMENT: 'Not settled',
+  NOT_SETTLED: 'Not settled',
+  LATE_SETTLEMENT: 'Late settlement',
+  DUPLICATE_REFUND: 'Duplicate refund',
+  REFUND_OVER_ORDER: 'Refund over order',
+  ROUNDING_LEAK: 'Rounding leak',
+};
+
+export const friendlyLabel = (type: string): string => friendlyLabels[type as AnomalyType | FindingType] ?? 'Other finding';
+
 const publicType = (type: AnomalyType): FindingType => type === AnomalyType.MISSING_SETTLEMENT ? 'NOT_SETTLED' : type === AnomalyType.REFUND_OVER_ORDER ? 'DUPLICATE_REFUND' : type as FindingType;
 const describes = (finding: Finding, planted: PlantedAnomaly) => {
   if (planted.order_id && finding.orderId !== planted.order_id) return false;
@@ -24,9 +37,19 @@ export function comparePlantedToCaught(ledger: SyntheticLedger, result: Reconcil
     }
     const plantedPaise = planted.reduce((sum, item) => sum + (item.amount_paise ?? 0), 0);
     const caughtPaise = matches.reduce((sum, item) => sum + item.leakedPaise, 0);
-    return { type, plantedCount: planted.length, caughtCount: matches.length, plantedPaise, caughtPaise, status: matches.length === planted.length && caughtPaise === plantedPaise ? 'MATCH' as const : 'MISSED' as const };
+    return { type, plantedCount: planted.length, caughtCount: matches.length, plantedPaise, caughtPaise, status: 'MISSED' as const };
   });
-  return { rows, missed, unexpected: result.findings.filter((finding) => !used.has(finding.id)), delayedPaise: result.delayedPaise };
+  const unexpected = result.findings.filter((finding) => !used.has(finding.id));
+  const unexpectedTypes = new Set(unexpected.map((finding) => finding.type));
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      status: row.caughtCount === row.plantedCount && row.caughtPaise === row.plantedPaise && !unexpectedTypes.has(publicType(row.type)) ? 'MATCH' : 'MISSED',
+    })),
+    missed,
+    unexpected,
+    delayedPaise: result.delayedPaise,
+  };
 }
 
 export function isSyntheticLedger(value: unknown): value is SyntheticLedger {
