@@ -83,6 +83,19 @@ describe('ReconZero contract and anomaly manifest', () => {
     expect(comparison.unexpected).toEqual([]);
   });
 
+  it('matches the complete generated proof for seed 42, including delayed late settlement amounts', () => {
+    const ledger = generateSyntheticLedger({ seed: 42 });
+    const comparison = comparePlantedToCaught(ledger, result(ledger));
+
+    expect(comparison.rows.every((row) => row.status === 'MATCH')).toBe(true);
+    expect(comparison.missed).toEqual([]);
+    expect(comparison.unexpected).toEqual([]);
+
+    const late = comparison.rows.find((row) => row.type === AnomalyType.LATE_SETTLEMENT)!;
+    expect(late.plantedPaise).toBeGreaterThan(0);
+    expect(late.caughtPaise).toBe(late.plantedPaise);
+  });
+
   it('reports a planted anomaly as missed when no matching finding is caught', () => {
     const planted = { type: AnomalyType.EXCESS_FEE, order_id: 'ORD-1', amount_paise: 7, detail: 'fee' };
     const comparison = comparePlantedToCaught(proofLedger([planted]), proofResult([]));
@@ -184,7 +197,7 @@ describe('ReconZero contract and anomaly manifest', () => {
         (!planted.order_id || f.orderId === planted.order_id) &&
         (!planted.settlement_batch_id || f.evidence.some((e) => e.value.includes(planted.settlement_batch_id!))));
       expect(finding, `missing finding for ${planted.type}`).toBeDefined();
-      expect(finding!.leakedPaise).toBe(planted.amount_paise);
+      expect(planted.type === AnomalyType.LATE_SETTLEMENT ? finding!.delayedPaise : finding!.leakedPaise).toBe(planted.amount_paise);
     }
   });
 
